@@ -1,0 +1,47 @@
+import { TextractClient, StartDocumentAnalysisCommand,AnalyzeDocumentCommand } from "@aws-sdk/client-textract";
+import { fromBase64} from "@aws-sdk/util-base64-node";
+
+
+const client = new TextractClient({ region: "ap-south-1" });
+
+export const handler = async (event, context) => {
+    try {
+        console.log(JSON.stringify(event))
+        const decodedData = Buffer.from(event.body, "base64").toString();
+        console.log('Decoded Image Data Length:', decodedData.length);
+        console.log(decodedData)
+
+        const command = new AnalyzeDocumentCommand({Document: {Bytes: Buffer.from(decodedData, "base64")},
+        FeatureTypes: ["TABLES", "FORMS"]});
+        
+        const response = await client.send(command);
+        const extractedText = extractTextFromResponse(response);
+
+        return {
+            statusCode: 200,
+            body: JSON.stringify({data: extractedText})
+        }
+            
+    }
+    catch(error){
+        console.log("er"+error)
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ message: 'Internal server error, Error processing file'})
+        };
+    }
+};
+
+function extractTextFromResponse(response) {
+    let extractedText = "";
+
+    if (response && response.Blocks) {
+        response.Blocks.forEach(block => {
+            if (block.BlockType === "LINE" && block.Text) {
+                extractedText += block.Text + "\n";
+            }
+        });
+    }
+
+    return extractedText.trim(); // Remove leading/trailing whitespace
+}
